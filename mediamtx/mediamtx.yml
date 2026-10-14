@@ -22,7 +22,7 @@ pathDefaults:
   recordPartDuration: 1s
   recordSegmentDuration: 15m
   # Overridden by RECORD_RETENTION in docker-compose.yml.
-  recordDeleteAfter: 7d
+  recordDeleteAfter: 6d
 
 paths:
   garage:

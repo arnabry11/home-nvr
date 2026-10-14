@@ -30,7 +30,7 @@ services:
     depends_on:
       - go2rtc
     environment:
-      MTX_PATHDEFAULTS_RECORDDELETEAFTER: ${RECORD_RETENTION:-7d}
+      MTX_PATHDEFAULTS_RECORDDELETEAFTER: ${RECORD_RETENTION:-6d}
     volumes:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
       - ${RECORDINGS_DIR:-./recordings}:/recordings

@@ -51,3 +51,21 @@ export const datetimeLocalToTimestamp = (value: string) => {
   if (Number.isNaN(timestamp)) throw new Error("Enter both a date and time.");
   return timestamp;
 };
+
+/**
+ * The first moment at or after `time` that any span covers: `time` itself when
+ * it is inside a span, otherwise the start of the next span. Undefined when
+ * nothing is recorded after `time`.
+ */
+export const recordedTimeFrom = (
+  spans: readonly { start: number; end: number }[],
+  time: number,
+) => {
+  let next: number | undefined;
+  for (const span of spans) {
+    if (span.start <= time && time < span.end) return time;
+    if (span.start > time && (next === undefined || span.start < next))
+      next = span.start;
+  }
+  return next;
+};

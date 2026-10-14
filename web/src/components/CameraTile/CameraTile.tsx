@@ -3,22 +3,33 @@ import { useEffect, useRef, useState } from "react";
 
 import { LiveCameraVideo } from "@/components/LiveCameraVideo";
 import { RecordedCameraVideo } from "@/components/RecordedCameraVideo/RecordedCameraVideo";
-import type { Camera } from "@/types/camera";
+import type { Camera, RecordingSpan } from "@/types/camera";
 
 interface CameraTileProps {
   camera?: Camera;
   timestamp?: string;
   playbackStart?: number;
+  masterTime?: number;
+  recordingSpans?: RecordingSpan[];
+  isSyncing?: boolean;
+  onBufferingChange?: (cameraId: string, isBuffering: boolean) => void;
   isPlayback?: boolean;
   isFollowingLive?: boolean;
   isPlaying?: boolean;
   playbackSpeed?: number;
 }
 
+const noSpans: RecordingSpan[] = [];
+const ignoreBuffering = () => undefined;
+
 export const CameraTile = ({
   camera,
   timestamp,
   playbackStart = 0,
+  masterTime = playbackStart,
+  recordingSpans = noSpans,
+  isSyncing = true,
+  onBufferingChange = ignoreBuffering,
   isPlayback = false,
   isFollowingLive = false,
   isPlaying = false,
@@ -62,8 +73,12 @@ export const CameraTile = ({
       ) : (
         <RecordedCameraVideo
           camera={camera}
+          spans={recordingSpans}
           startTime={playbackStart}
+          masterTime={masterTime}
           isPlaying={isPlaying}
+          isSyncing={isSyncing}
+          onBufferingChange={onBufferingChange}
           playbackSpeed={playbackSpeed}
           muted={isMuted}
         />

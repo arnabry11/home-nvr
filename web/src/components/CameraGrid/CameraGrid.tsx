@@ -1,4 +1,4 @@
-import type { Camera } from "@/types/camera";
+import type { Camera, RecordingSpan } from "@/types/camera";
 import { CameraTile } from "@/components/CameraTile";
 
 interface CameraGridProps {
@@ -7,6 +7,10 @@ interface CameraGridProps {
   flexible?: boolean;
   timestamp?: string;
   playbackStart?: number;
+  masterTime?: number;
+  recordingSpans?: Record<string, RecordingSpan[]>;
+  isSyncing?: boolean;
+  onBufferingChange?: (cameraId: string, isBuffering: boolean) => void;
   streamSession?: number;
   isPlayback?: boolean;
   isFollowingLive?: boolean;
@@ -20,6 +24,10 @@ export const CameraGrid = ({
   flexible = false,
   timestamp,
   playbackStart,
+  masterTime,
+  recordingSpans,
+  isSyncing,
+  onBufferingChange,
   streamSession = 0,
   isPlayback = false,
   isFollowingLive = false,
@@ -40,6 +48,10 @@ export const CameraGrid = ({
             camera={camera}
             timestamp={timestamp}
             playbackStart={playbackStart}
+            masterTime={masterTime}
+            recordingSpans={camera ? recordingSpans?.[camera.id] : undefined}
+            isSyncing={isSyncing}
+            onBufferingChange={onBufferingChange}
             isPlayback={isPlayback}
             isFollowingLive={isFollowingLive}
             isPlaying={isPlaying}

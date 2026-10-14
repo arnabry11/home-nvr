@@ -24,6 +24,8 @@ export interface RecordingSegment {
 
 export interface PlaybackData {
   segments: RecordingSegment[];
+  /** Recording spans per camera id; a span still being recorded never ends. */
+  spans: Record<string, RecordingSpan[]>;
   windowStart: number;
   windowEnd: number;
 }

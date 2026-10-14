@@ -36,6 +36,21 @@ Disk use is roughly 1 Mbps per camera on average (about 10 GB per camera per
 day); MediaMTX deletes by age, not by size, so size `RECORD_RETENTION` to the
 disk.
 
+## Playback
+
+All selected cameras follow one clock. If any camera is buffering, all of
+them wait; a camera that drifts more than 1.5 s from the clock reloads at the
+clock's time. Clicking a gap jumps to the next recording, stretches where no
+selected camera recorded are skipped, and catching up with the present on
+today's timeline switches to live view.
+
+| Key | Action |
+|-----|--------|
+| Space | Play / pause |
+| ← / → | Back / forward 10 s |
+| Shift + ← / → | Back / forward 1 min |
+| L | Follow live |
+
 ## Cameras
 
 Cameras are listed in two places:

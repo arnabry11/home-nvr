@@ -1,5 +1,5 @@
 import { CalendarDays, Check, Film, Radio, Search } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { nvrClient } from "@/api/rest/nvr-client";
 import { CameraGrid } from "@/components/CameraGrid";
@@ -12,14 +12,22 @@ import {
   formatDate,
   formatTimestamp,
   positionAtTimestamp,
+  recordedTimeFrom,
   timestampAtPosition,
 } from "@/utils/time";
+
+const todayRefreshMs = 30_000;
+// Playback this close to now hands over to the live streams.
+const liveEdgeMs = 10_000;
+const skipSeconds = 10;
+const longSkipSeconds = 60;
 
 export const PlaybackView = () => {
   const { cameras } = useCameras();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [playbackData, setPlaybackData] = useState<PlaybackData>({
     segments: [],
+    spans: {},
     windowStart: 0,
     windowEnd: 0,
   });
@@ -31,7 +39,12 @@ export const PlaybackView = () => {
   const [selectedDate, setSelectedDate] = useState<string>();
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isFollowingLive, setIsFollowingLive] = useState(false);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [bufferingIds, setBufferingIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const positionRef = useRef(position);
+  const followLiveRef = useRef<() => void>(() => undefined);
   const previousFrameRef = useRef<number | undefined>(undefined);
   const effectiveSelectedIds = useMemo(
     () =>
@@ -43,6 +56,10 @@ export const PlaybackView = () => {
   const selectedCameras = useMemo(
     () => cameras.filter((camera) => effectiveSelectedIds.includes(camera.id)),
     [cameras, effectiveSelectedIds],
+  );
+  const selectedSpans = useMemo(
+    () => selectedCameras.flatMap((camera) => playbackData.spans[camera.id] ?? []),
+    [playbackData.spans, selectedCameras],
   );
   useEffect(() => {
     let isCurrent = true;
@@ -68,38 +85,81 @@ export const PlaybackView = () => {
       : availableDates[0];
   useEffect(() => {
     if (!activeDate) return;
+    const isToday = activeDate === dayKey(Date.now());
     let isCurrent = true;
-    const requestId = window.setTimeout(() => {
+    const load = () => {
       void nvrClient
         .getPlaybackData(selectedCameras, activeDate)
         .then((data) => {
           if (isCurrent) setPlaybackData(data);
         })
         .catch(() => undefined);
-    }, 180);
+    };
+    const requestId = window.setTimeout(load, 180);
+    // Today's recordings keep growing; keep the lanes current.
+    const refreshId = isToday
+      ? window.setInterval(load, todayRefreshMs)
+      : undefined;
     return () => {
       isCurrent = false;
       window.clearTimeout(requestId);
+      window.clearInterval(refreshId);
     };
   }, [activeDate, selectedCameras]);
+  const handleBufferingChange = useCallback(
+    (cameraId: string, isBuffering: boolean) =>
+      setBufferingIds((ids) => {
+        if (ids.has(cameraId) === isBuffering) return ids;
+        const next = new Set(ids);
+        if (isBuffering) next.add(cameraId);
+        else next.delete(cameraId);
+        return next;
+      }),
+    [],
+  );
   useEffect(() => {
     positionRef.current = position;
   }, [position]);
+  const isClockHeld = bufferingIds.size > 0 || isScrubbing;
   useEffect(() => {
-    if (!isPlaying || playbackData.windowEnd <= playbackData.windowStart)
+    if (
+      !isPlaying ||
+      isFollowingLive ||
+      isClockHeld ||
+      playbackData.windowEnd <= playbackData.windowStart
+    )
       return;
     const dayDurationSeconds =
       (playbackData.windowEnd - playbackData.windowStart) / 1_000;
+    const isToday = activeDate === dayKey(Date.now());
     previousFrameRef.current = undefined;
     let frameId = 0;
     const advance = (now: number) => {
       const previousFrame = previousFrameRef.current ?? now;
       previousFrameRef.current = now;
-      const nextPosition =
+      let nextPosition =
         positionRef.current +
         ((now - previousFrame) / 1_000 / dayDurationSeconds) *
           100 *
           playbackSpeed;
+      const nextTime = timestampAtPosition(
+        playbackData.windowStart,
+        playbackData.windowEnd,
+        nextPosition,
+      );
+      if (isToday && nextTime >= Date.now() - liveEdgeMs) {
+        followLiveRef.current();
+        return;
+      }
+      // Skip stretches where none of the selected cameras recorded.
+      const recordedTime = recordedTimeFrom(selectedSpans, nextTime);
+      if (recordedTime === undefined && !isToday) nextPosition = 100;
+      else if (recordedTime !== undefined && recordedTime > nextTime)
+        nextPosition = positionAtTimestamp(
+          playbackData.windowStart,
+          playbackData.windowEnd,
+          recordedTime,
+        );
       if (nextPosition >= 100) {
         positionRef.current = 100;
         setPosition(100);
@@ -116,10 +176,14 @@ export const PlaybackView = () => {
       previousFrameRef.current = undefined;
     };
   }, [
+    activeDate,
+    isClockHeld,
+    isFollowingLive,
     isPlaying,
     playbackData.windowEnd,
     playbackData.windowStart,
     playbackSpeed,
+    selectedSpans,
   ]);
   useEffect(() => {
     if (!isFollowingLive || selectedCameras.length === 0) return;
@@ -156,11 +220,36 @@ export const PlaybackView = () => {
         : [...current, id];
     });
   };
-  const seek = (value: number) => {
+  const scrub = (value: number) => {
     setIsFollowingLive(false);
+    setIsScrubbing(true);
     positionRef.current = value;
     setPosition(value);
-    setLoadPosition(value);
+  };
+  const seek = (value: number, { snapToRecording = true } = {}) => {
+    const { windowStart, windowEnd } = playbackData;
+    const time = timestampAtPosition(windowStart, windowEnd, value);
+    // Landing in a gap jumps ahead to the next recording.
+    const recordedTime = snapToRecording
+      ? recordedTimeFrom(selectedSpans, time)
+      : undefined;
+    const target =
+      recordedTime !== undefined && recordedTime > time
+        ? positionAtTimestamp(windowStart, windowEnd, recordedTime)
+        : value;
+    setIsFollowingLive(false);
+    setIsScrubbing(false);
+    positionRef.current = target;
+    setPosition(target);
+    setLoadPosition(target);
+  };
+  const skip = (seconds: number) => {
+    const { windowStart, windowEnd } = playbackData;
+    if (windowEnd <= windowStart) return;
+    const step = ((seconds * 1_000) / (windowEnd - windowStart)) * 100;
+    seek(Math.min(100, Math.max(0, positionRef.current + step)), {
+      snapToRecording: false,
+    });
   };
   const followLive = () => {
     if (selectedCameras.length === 0) return;
@@ -185,6 +274,32 @@ export const PlaybackView = () => {
     setLoadPosition(livePosition);
     setIsPlaying(true);
   };
+  const shortcutRef = useRef<(event: KeyboardEvent) => void>(() => undefined);
+  useEffect(() => {
+    followLiveRef.current = followLive;
+    shortcutRef.current = (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, select, textarea, [contenteditable]")) return;
+      if (event.key === " ") {
+        // A focused button already handles Space itself.
+        if (target?.closest("button")) return;
+        event.preventDefault();
+        setIsPlaying((value) => !value);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const seconds = event.shiftKey ? longSkipSeconds : skipSeconds;
+        skip(event.key === "ArrowLeft" ? -seconds : seconds);
+      } else if (event.key === "l" || event.key === "L") {
+        followLive();
+      }
+    };
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => shortcutRef.current(event);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
   const selectedTimestamp = timestampAtPosition(
     playbackData.windowStart,
     playbackData.windowEnd,
@@ -290,10 +405,15 @@ export const PlaybackView = () => {
             cameras={selectedCameras}
             flexible
             isPlayback
-              isFollowingLive={isFollowingLive}
-            isPlaying={isPlaying}
+            isFollowingLive={isFollowingLive}
+            // Every camera waits while any of them buffers, so none runs ahead.
+            isPlaying={isPlaying && !isClockHeld}
             playbackSpeed={playbackSpeed}
             playbackStart={playbackStart}
+            masterTime={selectedTimestamp}
+            recordingSpans={playbackData.spans}
+            isSyncing={!isScrubbing}
+            onBufferingChange={handleBufferingChange}
             timestamp={
               playbackData.windowEnd
                 ? formatTimestamp(selectedTimestamp)
@@ -309,7 +429,9 @@ export const PlaybackView = () => {
             isPlaying={isPlaying}
             playbackSpeed={playbackSpeed}
             isLive={isFollowingLive}
+            onScrub={scrub}
             onPositionChange={seek}
+            onSkip={skip}
             onTogglePlay={() => setIsPlaying((value) => !value)}
             onPlaybackSpeedChange={setPlaybackSpeed}
           />

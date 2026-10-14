@@ -6,6 +6,8 @@ import { dayBounds, positionAtTimestamp } from "@/utils/time";
 const go2rtcOrigin = "/api/go2rtc";
 const playbackOrigin = "/api/mediamtx";
 const subStreamSuffix = "_sub";
+// A span that ended this recently is the one MediaMTX is still writing.
+const growingSpanThresholdMs = 2 * 60 * 1_000;
 
 interface MediamtxSpan {
   start: string;
@@ -81,6 +83,16 @@ export const nvrClient = {
           start: positionAtTimestamp(start, end, Math.max(span.start, start)),
           end: positionAtTimestamp(start, end, Math.min(span.end, end)),
         })),
+      ),
+      spans: Object.fromEntries(
+        spansByCamera.map(({ camera, spans }) => [
+          camera.id,
+          spans.map((span) =>
+            Date.now() - span.end < growingSpanThresholdMs
+              ? { ...span, end: Number.POSITIVE_INFINITY }
+              : span,
+          ),
+        ]),
       ),
       windowStart: start,
       windowEnd: end,
