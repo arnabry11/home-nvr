@@ -23,8 +23,10 @@ interface RecordedCameraVideoProps {
 const windowSeconds = 60 * 60;
 const maximumDriftMs = 1_500;
 const reloadCooldownMs = 2_000;
-// A camera that cannot buffer stops holding back the shared clock.
+// A camera that cannot buffer (for example a stretch recorded without video)
+// stops holding back the shared clock and retries less often.
 const bufferingTimeoutMs = 5_000;
+const stalledReloadCooldownMs = 10_000;
 
 const isRecordedAt = (spans: RecordingSpan[], time: number) =>
   spans.some((span) => span.start <= time && time < span.end);
@@ -45,8 +47,10 @@ export const RecordedCameraVideo = ({
   // Wall-clock time at the video's currentTime 0; undefined while unloaded.
   const loadedStartRef = useRef<number | undefined>(undefined);
   const lastLoadRef = useRef(0);
+  const isStalledRef = useRef(false);
   const syncRef = useRef<(time: number, force: boolean) => void>(() => undefined);
   const [hasError, setHasError] = useState(false);
+  const [isStalled, setIsStalled] = useState(false);
   const isInGap = !isRecordedAt(spans, masterTime);
 
   useEffect(() => {
@@ -68,8 +72,10 @@ export const RecordedCameraVideo = ({
           ? Number.POSITIVE_INFINITY
           : Math.abs(loadedStart + video.currentTime * 1_000 - time);
       if (!force && drift < maximumDriftMs) return;
-      if (!force && performance.now() - lastLoadRef.current < reloadCooldownMs)
-        return;
+      const cooldown = isStalledRef.current
+        ? stalledReloadCooldownMs
+        : reloadCooldownMs;
+      if (!force && performance.now() - lastLoadRef.current < cooldown) return;
       loadedStartRef.current = time;
       lastLoadRef.current = performance.now();
       video.src = nvrClient.playbackUrl(camera, time, windowSeconds);
@@ -105,18 +111,31 @@ export const RecordedCameraVideo = ({
     const video = videoRef.current;
     if (!video) return;
     let bufferingTimeoutId: number | undefined;
+    const markStalled = (stalled: boolean) => {
+      isStalledRef.current = stalled;
+      setIsStalled(stalled);
+    };
     const setBuffering = (isBuffering: boolean) => {
       window.clearTimeout(bufferingTimeoutId);
       onBufferingChange(camera.id, isBuffering);
       if (isBuffering)
-        bufferingTimeoutId = window.setTimeout(
-          () => onBufferingChange(camera.id, false),
-          bufferingTimeoutMs,
-        );
+        bufferingTimeoutId = window.setTimeout(() => {
+          markStalled(true);
+          onBufferingChange(camera.id, false);
+        }, bufferingTimeoutMs);
     };
-    const onWaiting = () => setBuffering(true);
-    const onReady = () => {
+    // A stalled camera keeps re-entering "waiting" whenever playback resumes;
+    // it must not pause the other cameras again until it plays on its own.
+    const onWaiting = () => {
+      if (!isStalledRef.current) setBuffering(true);
+    };
+    const onCanPlay = () => {
       setHasError(false);
+      if (!isStalledRef.current) setBuffering(false);
+    };
+    const onPlaying = () => {
+      setHasError(false);
+      markStalled(false);
       setBuffering(false);
     };
     const onError = () => {
@@ -126,14 +145,14 @@ export const RecordedCameraVideo = ({
       setBuffering(false);
     };
     video.addEventListener("waiting", onWaiting);
-    video.addEventListener("playing", onReady);
-    video.addEventListener("canplay", onReady);
+    video.addEventListener("playing", onPlaying);
+    video.addEventListener("canplay", onCanPlay);
     video.addEventListener("error", onError);
     return () => {
       window.clearTimeout(bufferingTimeoutId);
       video.removeEventListener("waiting", onWaiting);
-      video.removeEventListener("playing", onReady);
-      video.removeEventListener("canplay", onReady);
+      video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("error", onError);
       onBufferingChange(camera.id, false);
     };
@@ -149,8 +168,11 @@ export const RecordedCameraVideo = ({
 
   return (
     <>
-      {(isInGap || hasError) && (
+      {isInGap || hasError ? (
         <span className="stream-error">No recording at this time</span>
+      ) : (
+        isStalled &&
+        isPlaying && <span className="stream-error">No video at this time</span>
       )}
       <video ref={videoRef} className="camera-video" muted playsInline />
     </>

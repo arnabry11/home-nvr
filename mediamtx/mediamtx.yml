@@ -11,6 +11,18 @@ srt: no
 api: yes
 apiAddress: :9997
 
+# Nothing is published outside the compose network (the web container proxies
+# only the playback server), so containers on it get full access; the
+# watchdog uses the API to reconnect cameras.
+authInternalUsers:
+  - user: any
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+      - action: api
+
 playback: yes
 playbackAddress: :9996
 

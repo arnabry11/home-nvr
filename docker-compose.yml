@@ -35,6 +35,17 @@ services:
       - ./mediamtx/mediamtx.yml:/mediamtx.yml:ro
       - ${RECORDINGS_DIR:-./recordings}:/recordings
 
+  watchdog:
+    image: python:3.13-alpine
+    container_name: nvr-watchdog
+    restart: always
+    depends_on:
+      - go2rtc
+      - mediamtx
+    command: ["python", "-u", "/watchdog.py"]
+    volumes:
+      - ./watchdog/watchdog.py:/watchdog.py:ro
+
   web:
     build:
       context: ./web

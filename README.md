@@ -19,6 +19,7 @@ cameras ──RTSP──▶ go2rtc ──RTSP (H.264 + AAC)──▶ MediaMTX �
 | `mediamtx`  | Records every camera's full-resolution stream to fMP4 segments, deletes them after `RECORD_RETENTION`, and serves clips through its playback API. |
 | `web`       | The UI (in [`web/`](web)), plus an nginx proxy for `/api/go2rtc/` and `/api/mediamtx/`. |
 | `tailscale` | Publishes `web` over HTTPS on the tailnet. No service publishes a port on the host. |
+| `watchdog`  | Reconnects a camera whose recording lost its video while its audio kept flowing (a camera can do this; MediaMTX would otherwise record audio alone). |
 
 ## Deploy
 
