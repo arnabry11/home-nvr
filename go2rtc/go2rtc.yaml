@@ -1,0 +1,54 @@
+# Camera connections. go2rtc keeps one RTSP session per camera stream and
+# re-serves it to MediaMTX (recording) and to browsers (live view).
+#
+# The cameras send G.711 (PCMA) audio, which browsers cannot play, so every
+# stream also gets an ffmpeg source that adds an AAC copy of the audio.
+# `<name>` is the full-resolution stream (recorded); `<name>_sub` is the
+# low-resolution stream used for the live grid.
+api:
+  listen: ":1984"
+  # Browsers reach go2rtc through the web container's proxy, so the WebSocket
+  # Origin never matches go2rtc's own host. go2rtc publishes no ports.
+  origin: "*"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ""
+
+streams:
+  garage:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.101:554/stream1#backchannel=0#timeout=30
+    - ffmpeg:garage#audio=aac
+  garage_sub:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.101:554/stream2#backchannel=0#timeout=30
+    - ffmpeg:garage_sub#audio=aac
+
+  backside_garden:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.102:554/stream1#backchannel=0#timeout=30
+    - ffmpeg:backside_garden#audio=aac
+  backside_garden_sub:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.102:554/stream2#backchannel=0#timeout=30
+    - ffmpeg:backside_garden_sub#audio=aac
+
+  left_corner:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.103:554/stream1#backchannel=0#timeout=30
+    - ffmpeg:left_corner#audio=aac
+  left_corner_sub:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.103:554/stream2#backchannel=0#timeout=30
+    - ffmpeg:left_corner_sub#audio=aac
+
+  sideway:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.104:554/stream1#backchannel=0#timeout=30
+    - ffmpeg:sideway#audio=aac
+  sideway_sub:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.104:554/stream2#backchannel=0#timeout=30
+    - ffmpeg:sideway_sub#audio=aac
+
+  backside_main:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.105:554/stream1#backchannel=0#timeout=30
+    - ffmpeg:backside_main#audio=aac
+  backside_main_sub:
+    - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.105:554/stream2#backchannel=0#timeout=30
+    - ffmpeg:backside_main_sub#audio=aac

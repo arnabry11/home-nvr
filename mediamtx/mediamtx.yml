@@ -1,0 +1,37 @@
+# MediaMTX records every camera from go2rtc (video copied as-is, AAC audio)
+# and serves recordings back through its playback API.
+logLevel: info
+
+rtsp: no
+rtmp: no
+hls: no
+webrtc: no
+srt: no
+
+api: yes
+apiAddress: :9997
+
+playback: yes
+playbackAddress: :9996
+
+pathDefaults:
+  sourceOnDemand: no
+  record: yes
+  recordPath: /recordings/%path/%Y-%m-%d_%H-%M-%S-%f
+  recordFormat: fmp4
+  recordPartDuration: 1s
+  recordSegmentDuration: 15m
+  # Overridden by RECORD_RETENTION in docker-compose.yml.
+  recordDeleteAfter: 7d
+
+paths:
+  garage:
+    source: rtsp://go2rtc:8554/garage?video&audio=aac
+  backside_garden:
+    source: rtsp://go2rtc:8554/backside_garden?video&audio=aac
+  left_corner:
+    source: rtsp://go2rtc:8554/left_corner?video&audio=aac
+  sideway:
+    source: rtsp://go2rtc:8554/sideway?video&audio=aac
+  backside_main:
+    source: rtsp://go2rtc:8554/backside_main?video&audio=aac
