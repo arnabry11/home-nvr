@@ -25,7 +25,7 @@ const maximumDriftMs = 1_500;
 const reloadCooldownMs = 2_000;
 // A camera that cannot buffer (for example a stretch recorded without video)
 // stops holding back the shared clock and retries less often.
-const bufferingTimeoutMs = 5_000;
+const bufferingTimeoutMs = 2_000;
 const stalledReloadCooldownMs = 10_000;
 const recoveredAfterSeconds = 0.5;
 
