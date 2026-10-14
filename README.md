@@ -64,6 +64,11 @@ Cameras are listed in two places:
 
 The UI discovers cameras from go2rtc, so nothing else needs to change.
 
+To record a camera without audio, leave out its `ffmpeg:` sources in
+go2rtc and `&audio=aac` from its MediaMTX source. Backside Garden, Backside
+Main and Sideway are set up this way: their AAC reached MediaMTX too late and
+was dropped, leaving recordings whose empty audio track stalled playback.
+
 ## Development
 
 ```bash

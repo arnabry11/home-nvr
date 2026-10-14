@@ -1,8 +1,11 @@
 # Camera connections. go2rtc keeps one RTSP session per camera stream and
 # re-serves it to MediaMTX (recording) and to browsers (live view).
 #
-# The cameras send G.711 (PCMA) audio, which browsers cannot play, so every
-# stream also gets an ffmpeg source that adds an AAC copy of the audio.
+# The cameras send G.711 (PCMA) audio, which browsers cannot play, so a stream
+# with audio also gets an ffmpeg source that adds an AAC copy of it. Backside
+# Garden, Backside Main and Sideway have none: on their weak links the AAC
+# arrived too late for MediaMTX, which dropped it and left recordings with an
+# empty audio track that browsers wait seconds on before playing.
 # `<name>` is the full-resolution stream (recorded); `<name>_sub` is the
 # low-resolution stream used for the live grid.
 api:
@@ -32,10 +35,8 @@ streams:
 
   backside_garden:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.102:554/stream1#backchannel=0#timeout=30
-    - ffmpeg:backside_garden#audio=aac
   backside_garden_sub:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.102:554/stream2#backchannel=0#timeout=30
-    - ffmpeg:backside_garden_sub#audio=aac
 
   left_corner:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.103:554/stream1#backchannel=0#timeout=30
@@ -46,14 +47,10 @@ streams:
 
   sideway:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.104:554/stream1#backchannel=0#timeout=30
-    - ffmpeg:sideway#audio=aac
   sideway_sub:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.104:554/stream2#backchannel=0#timeout=30
-    - ffmpeg:sideway_sub#audio=aac
 
   backside_main:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.105:554/stream1#backchannel=0#timeout=30
-    - ffmpeg:backside_main#audio=aac
   backside_main_sub:
     - rtsp://${CAMERA_USER}:${CAMERA_PASSWORD}@192.168.0.105:554/stream2#backchannel=0#timeout=30
-    - ffmpeg:backside_main_sub#audio=aac

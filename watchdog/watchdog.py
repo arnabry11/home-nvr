@@ -10,6 +10,7 @@ for a few seconds (so go2rtc closes the camera session) and then back.
 import json
 import os
 import time
+import urllib.parse
 import urllib.request
 
 GO2RTC_API = os.environ.get("GO2RTC_API", "http://go2rtc:1984")
@@ -61,10 +62,15 @@ def recorder_video_packets():
     return packets
 
 
+def detached_source(source):
+    # Carries the real source, so a restart mid-detach can put it back.
+    return f"{DETACHED_SOURCE}?{urllib.parse.urlencode({'restore': source})}"
+
+
 def recover(path):
     source = request_json(f"{MEDIAMTX_API}/v3/config/paths/get/{path}")["source"]
     log(f"{path}: no video for {CHECK_SECONDS}s, reconnecting the camera")
-    set_source(path, DETACHED_SOURCE)
+    set_source(path, detached_source(source))
     try:
         time.sleep(DETACH_SECONDS)
     finally:
@@ -75,8 +81,9 @@ def restore_detached_paths():
     """Undo a detach interrupted by a restart of this watchdog."""
     paths = request_json(f"{MEDIAMTX_API}/v3/config/paths/list")["items"]
     for path in paths:
-        if path.get("source") == DETACHED_SOURCE:
-            source = f"rtsp://go2rtc:8554/{path['name']}?video&audio=aac"
+        detached = urllib.parse.urlsplit(path.get("source") or "")
+        if detached._replace(query="").geturl() == DETACHED_SOURCE:
+            source = urllib.parse.parse_qs(detached.query)["restore"][0]
             log(f"{path['name']}: restoring source after an interrupted reconnect")
             set_source(path["name"], source)
 
