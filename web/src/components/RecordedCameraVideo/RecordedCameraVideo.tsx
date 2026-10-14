@@ -27,6 +27,7 @@ const reloadCooldownMs = 2_000;
 // stops holding back the shared clock and retries less often.
 const bufferingTimeoutMs = 5_000;
 const stalledReloadCooldownMs = 10_000;
+const recoveredAfterSeconds = 0.5;
 
 const isRecordedAt = (spans: RecordingSpan[], time: number) =>
   spans.some((span) => span.start <= time && time < span.end);
@@ -135,8 +136,13 @@ export const RecordedCameraVideo = ({
     };
     const onPlaying = () => {
       setHasError(false);
-      markStalled(false);
-      setBuffering(false);
+      if (!isStalledRef.current) setBuffering(false);
+    };
+    // "playing" can fire for a moment on a source that then stalls again, so a
+    // stalled camera only rejoins once its picture actually moves.
+    const onTimeUpdate = () => {
+      if (isStalledRef.current && video.currentTime > recoveredAfterSeconds)
+        markStalled(false);
     };
     const onError = () => {
       // Removing the source on a gap also raises an error; ignore that one.
@@ -148,12 +154,14 @@ export const RecordedCameraVideo = ({
     video.addEventListener("playing", onPlaying);
     video.addEventListener("canplay", onCanPlay);
     video.addEventListener("error", onError);
+    video.addEventListener("timeupdate", onTimeUpdate);
     return () => {
       window.clearTimeout(bufferingTimeoutId);
       video.removeEventListener("waiting", onWaiting);
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("canplay", onCanPlay);
       video.removeEventListener("error", onError);
+      video.removeEventListener("timeupdate", onTimeUpdate);
       onBufferingChange(camera.id, false);
     };
   }, [camera.id, onBufferingChange]);
