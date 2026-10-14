@@ -14,6 +14,11 @@ api:
 rtsp:
   listen: ":8554"
 
+# ffmpeg runs with "-v error", so this only adds its error output (otherwise
+# a failing audio converter shows up as a bare "EOF").
+log:
+  exec: debug
+
 webrtc:
   listen: ""
 
