@@ -34,9 +34,11 @@ type liveStream struct {
 	segment *segmentFile
 	// originNanos is the stream time (DTS) that becomes zero in the output.
 	originNanos int64
-	sequence    uint32
-	poll, idle  time.Duration
-	opened      time.Time
+	// first is the part the stream starts with, trimmed to its keyframe.
+	first      *fmp4.Part
+	sequence   uint32
+	poll, idle time.Duration
+	opened     time.Time
 }
 
 // openLive positions a stream at the newest keyframe of the camera's newest
@@ -62,15 +64,17 @@ func openLive(ctx context.Context, dir string, poll, idle time.Duration) (*liveS
 		segment, err := openSegment(path)
 		if err == nil {
 			if err = segment.seekToNewestKeyframe(); err == nil {
-				first, _, err := segment.partAt(segment.offset)
+				first, err := segment.nextPart()
 				if err != nil {
 					segment.Close()
 					return nil, err
 				}
+				segment.trimToKeyframe(first)
 				return &liveStream{
 					dir:         dir,
 					segment:     segment,
 					originNanos: segment.startNanos(first),
+					first:       first,
 					poll:        poll,
 					idle:        idle,
 					opened:      time.Now(),
@@ -98,6 +102,10 @@ func (l *liveStream) initSegment() []byte { return l.segment.initRaw }
 // copyTo writes each part to w as MediaMTX records it, until the context
 // ends, the recording restarts or it stops growing for idle.
 func (l *liveStream) copyTo(ctx context.Context, w io.Writer, flush func()) error {
+	if err := l.write(w, l.first); err != nil {
+		return err
+	}
+	flush()
 	lastPart := time.Now()
 	for {
 		part, err := l.segment.nextPart()

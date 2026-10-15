@@ -58,6 +58,25 @@ func TestSeekToNewestKeyframe(t *testing.T) {
 	}
 }
 
+func TestSeekToNewestKeyframeInsideAPart(t *testing.T) {
+	segment := testSegment{stream: streamA, keyframes: []bool{true, false, true, false}, keyframeSample: 10}
+	s, err := openSegment(segment.write(t, t.TempDir(), 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.seekToNewestKeyframe(); err != nil {
+		t.Fatal(err)
+	}
+	part, err := s.nextPart()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := baseTime(t, part, 1); got != 2*90000 {
+		t.Errorf("started at the part at video time %d, want %d", got, 2*90000)
+	}
+}
+
 func TestSeekToNewestKeyframeWithoutOne(t *testing.T) {
 	segment := testSegment{stream: streamA, keyframes: []bool{false, false}}
 	s, err := openSegment(segment.write(t, t.TempDir(), 2))

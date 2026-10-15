@@ -28,8 +28,11 @@ type testSegment struct {
 	stream    [16]byte
 	number    uint64
 	start     time.Duration // stream time (DTS) at the segment's start
-	keyframes []bool        // whether each part's video starts with a keyframe
-	audio     bool
+	keyframes []bool        // whether each part's video has a keyframe
+	// keyframeSample is the keyframe's position in those parts: MediaMTX cuts
+	// parts every second, wherever the camera's keyframes fall.
+	keyframeSample int
+	audio          bool
 	// audioLead starts each part's audio this much before its video
 	// (except in part 0, which starts at zero).
 	audioLead time.Duration
@@ -78,7 +81,7 @@ func (s testSegment) partBytes(t *testing.T, i int) []byte {
 	for n := range 25 {
 		video.Samples = append(video.Samples, &fmp4.Sample{
 			Duration:        3600,
-			IsNonSyncSample: n > 0 || !s.keyframes[i],
+			IsNonSyncSample: n != s.keyframeSample || !s.keyframes[i],
 			Payload:         []byte{0, 0, 0, 1, byte(n)},
 		})
 	}

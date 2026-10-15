@@ -154,9 +154,9 @@ func (s *segmentFile) nextPart() (*fmp4.Part, error) {
 	return part, nil
 }
 
-// seekToNewestKeyframe moves to the newest written part whose video starts
-// with a keyframe, where a viewer can start decoding. It returns
-// errIncomplete while there is none.
+// seekToNewestKeyframe moves to the newest written part whose video has a
+// keyframe, where a viewer can start decoding (see trimToKeyframe). It
+// returns errIncomplete while there is none.
 func (s *segmentFile) seekToNewestKeyframe() error {
 	fileSize, err := s.size()
 	if err != nil {
@@ -187,7 +187,7 @@ func (s *segmentFile) seekToNewestKeyframe() error {
 		if err != nil {
 			return err
 		}
-		if startsWithKeyframe(part, video) {
+		if keyframeIndex(part, video) >= 0 {
 			s.offset = offsets[i]
 			return nil
 		}
@@ -195,13 +195,54 @@ func (s *segmentFile) seekToNewestKeyframe() error {
 	return errIncomplete
 }
 
-func startsWithKeyframe(part *fmp4.Part, videoID int) bool {
+// keyframeIndex is the position of the part's first video keyframe, or -1.
+func keyframeIndex(part *fmp4.Part, videoID int) int {
 	for _, track := range part.Tracks {
-		if track.ID == videoID {
-			return len(track.Samples) > 0 && !track.Samples[0].IsNonSyncSample
+		if track.ID != videoID {
+			continue
+		}
+		for i, sample := range track.Samples {
+			if !sample.IsNonSyncSample {
+				return i
+			}
 		}
 	}
-	return false
+	return -1
+}
+
+// trimToKeyframe drops what comes before the part's first video keyframe, so
+// a stream starts with a picture the decoder can show. MediaMTX cuts parts
+// every second, which rarely lines up with the camera's keyframes. Audio
+// keeps the sample that is playing at the keyframe.
+func (s *segmentFile) trimToKeyframe(part *fmp4.Part) {
+	videoID := s.videoTrackID()
+	keyframe := keyframeIndex(part, videoID)
+	if keyframe < 0 {
+		return
+	}
+	var keyframeNanos int64
+	for _, track := range part.Tracks {
+		if track.ID == videoID {
+			for _, sample := range track.Samples[:keyframe] {
+				track.BaseTime += uint64(sample.Duration)
+			}
+			track.Samples = track.Samples[keyframe:]
+			keyframeNanos = toNanos(int64(track.BaseTime), s.timeScale(videoID))
+		}
+	}
+	tracks := part.Tracks[:0]
+	for _, track := range part.Tracks {
+		scale := s.timeScale(track.ID)
+		for track.ID != videoID && len(track.Samples) > 0 &&
+			toNanos(int64(track.BaseTime)+int64(track.Samples[0].Duration), scale) <= keyframeNanos {
+			track.BaseTime += uint64(track.Samples[0].Duration)
+			track.Samples = track.Samples[1:]
+		}
+		if len(track.Samples) > 0 {
+			tracks = append(tracks, track)
+		}
+	}
+	part.Tracks = tracks
 }
 
 // videoTrackID is the ID of the video track. MediaMTX can order tracks

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/bluenviron/mediacommon/v2/pkg/formats/fmp4"
 )
 
 func openTestLive(t *testing.T, dir string, idle time.Duration) *liveStream {
@@ -62,6 +64,33 @@ func TestLiveStartsAtTheNewestKeyframeFromZero(t *testing.T) {
 			t.Errorf("part %d: sequence %d, video %d, audio %d; want %+v",
 				i, part.SequenceNumber, baseTime(t, part, 1), baseTime(t, part, 2), want)
 		}
+	}
+}
+
+func TestLiveStartsAtAKeyframeInsideAPart(t *testing.T) {
+	dir := t.TempDir()
+	// Part 2's keyframe is its 11th frame, 0.4 s in.
+	testSegment{stream: streamA, keyframes: []bool{true, false, true, false}, keyframeSample: 10, audio: true}.write(t, dir, 4)
+	out, _ := runLive(t, openTestLive(t, dir, time.Second))
+	parts := out.waitForParts(t, 2)
+	var video *fmp4.PartTrack
+	for _, track := range parts[0].Tracks {
+		if track.ID == 1 {
+			video = track
+		}
+	}
+	if len(video.Samples) != 15 || video.Samples[0].IsNonSyncSample {
+		t.Fatalf("first part has %d video frames starting with a keyframe: %v; want 15 starting with one",
+			len(video.Samples), !video.Samples[0].IsNonSyncSample)
+	}
+	// Audio keeps the sample that is playing at the keyframe (from 2.375 s),
+	// so it becomes zero and the keyframe lands 25 ms later.
+	if audio, video := baseTime(t, parts[0], 2), baseTime(t, parts[0], 1); audio != 0 || video != 2250 {
+		t.Errorf("audio %d, video %d; want 0 and 2250", audio, video)
+	}
+	// The next part starts at 3 s, 0.625 s after the new zero at 2.375 s.
+	if got := baseTime(t, parts[1], 1); got != 56250 {
+		t.Errorf("next part video time %d, want 56250", got)
 	}
 }
 
