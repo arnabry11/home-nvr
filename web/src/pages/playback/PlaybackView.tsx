@@ -414,8 +414,10 @@ export const PlaybackView = () => {
             recordingSpans={playbackData.spans}
             isSyncing={!isScrubbing}
             onBufferingChange={handleBufferingChange}
+            // Live view runs a few seconds behind, so no clock is shown:
+            // the tiles say LIVE instead.
             timestamp={
-              playbackData.windowEnd
+              playbackData.windowEnd && !isFollowingLive
                 ? formatTimestamp(selectedTimestamp)
                 : undefined
             }

@@ -65,11 +65,7 @@ export const CameraTile = ({
   return (
     <article className="camera-tile" ref={tileRef}>
       {isLive ? (
-        <LiveCameraVideo
-          // Full resolution only when the tile fills the screen.
-          stream={isFullscreen ? camera.mainStream : camera.liveStream}
-          muted={isMuted}
-        />
+        <LiveCameraVideo camera={camera} muted={isMuted} />
       ) : (
         <RecordedCameraVideo
           camera={camera}

@@ -93,7 +93,7 @@ export const PlaybackTimeline = ({ cameras, segments, windowStart, windowEnd, po
   }, [position, view, zoomLevel]);
 
   return <section className="timeline-card">
-    <div className="timeline-heading"><div><p className="eyebrow">Master clock</p><h2>Shared recording timeline</h2></div><span>{windowEnd ? formatTimestamp(timestamp) : 'Loading timeline…'}</span></div>
+    <div className="timeline-heading"><div><p className="eyebrow">Master clock</p><h2>Shared recording timeline</h2></div><span>{isLive ? 'Live' : windowEnd ? formatTimestamp(timestamp) : 'Loading timeline…'}</span></div>
     <div className={`timeline-ruler ${zoomLevel > 1 ? 'pannable' : ''}`} title={zoomLevel > 1 ? 'Drag to pan the zoomed timeline' : undefined} onPointerDown={beginPan} onPointerMove={panTimeline} onPointerUp={() => { panRef.current = undefined; }}>{rulerPositions.map((rulerPosition) => <span key={rulerPosition}>{windowEnd ? formatTime(timestampAtPosition(windowStart, windowEnd, view.start + (rulerPosition / 100) * view.span)) : '--:--'}</span>)}</div>
     <div className="recording-lanes">{cameras.map((camera, index) => <div className="recording-lane" key={camera.id}><label>{camera.name}</label><div className="lane-track" onPointerDown={beginSeek} onPointerMove={(event) => { if (isSeekingRef.current) scrub(positionFromPointer(event)); }} onPointerUp={endSeek} onPointerCancel={endSeek}>{segments.filter((segment) => segment.cameraId === camera.id).map((segment, segmentIndex) => {
       const start = Math.max(segment.start, view.start);

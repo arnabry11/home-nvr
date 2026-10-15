@@ -1,11 +1,11 @@
 import type { Camera, PlaybackData, RecordingSpan } from "@/types/camera";
 import { dayBounds, positionAtTimestamp } from "@/utils/time";
 
-// Both are reverse-proxied on the same origin: by Vite in development and by
+// All are reverse-proxied on the same origin: by Vite in development and by
 // nginx in the container.
 const go2rtcOrigin = "/api/go2rtc";
 const playbackOrigin = "/api/mediamtx";
-const subStreamSuffix = "_sub";
+const liveOrigin = "/api/live";
 // A span that ended this recently is the one MediaMTX is still writing.
 const growingSpanThresholdMs = 2 * 60 * 1_000;
 
@@ -53,18 +53,13 @@ export const nvrClient = {
     const streams = await requestJson<Record<string, unknown>>(
       `${go2rtcOrigin}/api/streams`,
     );
-    const names = Object.keys(streams);
-    return names
-      .filter((name) => !name.endsWith(subStreamSuffix))
+    return Object.keys(streams)
       .sort()
       .map((name) => ({
         id: name,
         name: formatCameraName(name),
         status: "online" as const,
         mainStream: name,
-        liveStream: names.includes(`${name}${subStreamSuffix}`)
-          ? `${name}${subStreamSuffix}`
-          : name,
       }));
   },
   listSpans,
@@ -118,8 +113,10 @@ export const nvrClient = {
       throw new Error("There is no recording for this camera in the selected range.");
     return this.playbackUrl(camera, start, (end - start) / 1_000, "mp4");
   },
-  liveSocketUrl(stream: string) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}${go2rtcOrigin}/api/ws?${new URLSearchParams({ src: stream })}`;
+  /** An endless fMP4 following the camera's newest recording. */
+  liveUrl(stream: string, session: number) {
+    return `${liveOrigin}/${encodeURIComponent(stream)}?${new URLSearchParams({
+      session: String(session),
+    })}`;
   },
 };

@@ -4,10 +4,8 @@ export interface Camera {
   id: string;
   name: string;
   status: CameraStatus;
-  /** Full-resolution go2rtc stream; also the MediaMTX recording path. */
+  /** go2rtc stream name; also the MediaMTX recording path and live service camera. */
   mainStream: string;
-  /** Low-resolution go2rtc stream used for the live grid. */
-  liveStream: string;
 }
 
 /** A continuous stretch of recording, in epoch milliseconds. */
