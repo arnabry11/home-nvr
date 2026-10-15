@@ -1,23 +1,25 @@
 # Home NVR
 
 A small, inference-free NVR for the home cameras: continuous recording with
-audio, live view, synchronized multi-camera playback and MP4 export. Nothing
-is decoded or re-encoded except the cameras' G.711 audio, so it runs in a few
-percent of one CPU core.
+audio, synchronized multi-camera playback, a live view built from the
+recordings and MP4 export. Nothing is decoded or re-encoded: video and audio
+are recorded exactly as the cameras send them, so it runs in a few percent of
+one CPU core.
 
 ```
-cameras ──RTSP──▶ go2rtc ──RTSP (H.264 + AAC)──▶ MediaMTX ──▶ recordings/ (fMP4)
-                    │                               │
-                    │ live MSE (WebSocket)          │ playback API (/list, /get)
-                    ▼                               ▼
+cameras ──RTSP──▶ go2rtc ──RTSP (H.264 + G.711)──▶ MediaMTX ──▶ recordings/ (fMP4)
+                                                      │               │
+                                    playback API (/list, /get)   live (follows the newest segment)
+                                                      ▼               ▼
                   web (React UI + nginx) ◀── Tailscale sidecar ── https://nvr.<tailnet>.ts.net
 ```
 
 | Service     | Role |
 |-------------|------|
-| `go2rtc`    | Holds one RTSP session per camera stream and re-serves it. Adds an AAC copy of the PCMA audio (browsers cannot play PCMA). |
-| `mediamtx`  | Records every camera's full-resolution stream to fMP4 segments, deletes them after `RECORD_RETENTION`, and serves clips through its playback API. |
-| `web`       | The UI (in [`web/`](web)), plus an nginx proxy for `/api/go2rtc/` and `/api/mediamtx/`. |
+| `go2rtc`    | Holds one RTSP session per camera and re-serves it to MediaMTX. |
+| `mediamtx`  | Records every camera (H.264, G.711 stored as LPCM) to fMP4 segments, deletes them after `RECORD_RETENTION`, and serves clips through its playback API. |
+| `live`      | Serves each camera's newest recording as one endless fMP4 stream for the live view (in [`live/`](live)). Reads the recordings read-only. |
+| `web`       | The UI (in [`web/`](web)), plus an nginx proxy for `/api/go2rtc/`, `/api/mediamtx/` and `/api/live/`. |
 | `tailscale` | Publishes `web` over HTTPS on the tailnet. No service publishes a port on the host. |
 | `watchdog`  | Reconnects a camera whose recording lost its video while its audio kept flowing (a camera can do this; MediaMTX would otherwise record audio alone). |
 
@@ -45,6 +47,15 @@ clock's time. Clicking a gap jumps to the next recording, stretches where no
 selected camera recorded are skipped, and catching up with the present on
 today's timeline switches to live view.
 
+Live view plays each camera's newest recording a few seconds behind real time
+(the Tapo app is the real-time view). The live service starts at the newest
+keyframe and keeps following the recording across segments; when the
+recording restarts or stops, it ends the stream and the browser reconnects.
+
+Only Chrome is supported: recordings carry the cameras' audio as LPCM, which
+Chrome plays in a plain video element but not through Media Source
+Extensions, and some other browsers not at all.
+
 | Key | Action |
 |-----|--------|
 | Space | Play / pause |
@@ -56,30 +67,30 @@ today's timeline switches to live view.
 
 Cameras are listed in two places:
 
-1. [`go2rtc/go2rtc.yaml`](go2rtc/go2rtc.yaml): `<name>` is the main stream
-   (recorded, used for playback and fullscreen live view) and `<name>_sub` is
-   the low-resolution stream used for the live grid.
+1. [`go2rtc/go2rtc.yaml`](go2rtc/go2rtc.yaml): one stream per camera, its
+   full-resolution stream.
 2. [`mediamtx/mediamtx.yml`](mediamtx/mediamtx.yml): one path per camera,
-   pulling `<name>` from go2rtc.
+   pulling `<name>?video&audio=pcma` from go2rtc.
 
 The UI discovers cameras from go2rtc, so nothing else needs to change.
-
-To record a camera without audio, leave out its `ffmpeg:` sources in
-go2rtc and `&audio=aac` from its MediaMTX source. Backside Garden, Backside
-Main and Sideway are set up this way: their AAC reached MediaMTX too late and
-was dropped, leaving recordings whose empty audio track stalled playback.
 
 ## Development
 
 ```bash
 # Recorder stack with the APIs published on localhost (no Tailscale).
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d go2rtc mediamtx
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d go2rtc mediamtx live
 
 cd web
 npm install
-npm run dev      # proxies /api/go2rtc and /api/mediamtx to the containers
+npm run dev      # proxies /api/go2rtc, /api/mediamtx and /api/live to the containers
 npm run lint
 npm run build
+```
+
+```bash
+cd live
+go test ./...
+RECORDINGS_DIR=../recordings LISTEN_ADDR=:8082 go run .   # instead of the container
 ```
 
 Add `web` to the compose command to try the production image at

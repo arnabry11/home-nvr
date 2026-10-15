@@ -1,6 +1,6 @@
-# MediaMTX records every camera from go2rtc (video copied as-is, AAC audio
-# where go2rtc provides it)
-# and serves recordings back through its playback API.
+# MediaMTX records every camera from go2rtc as the camera sends it (H.264
+# video, G.711 audio stored as LPCM) and serves recordings back through its
+# playback API. The live service reads the same files.
 logLevel: info
 
 rtsp: no
@@ -39,12 +39,12 @@ pathDefaults:
 
 paths:
   garage:
-    source: rtsp://go2rtc:8554/garage?video&audio=aac
+    source: rtsp://go2rtc:8554/garage?video&audio=pcma
   backside_garden:
-    source: rtsp://go2rtc:8554/backside_garden?video
+    source: rtsp://go2rtc:8554/backside_garden?video&audio=pcma
   left_corner:
-    source: rtsp://go2rtc:8554/left_corner?video&audio=aac
+    source: rtsp://go2rtc:8554/left_corner?video&audio=pcma
   sideway:
-    source: rtsp://go2rtc:8554/sideway?video
+    source: rtsp://go2rtc:8554/sideway?video&audio=pcma
   backside_main:
-    source: rtsp://go2rtc:8554/backside_main?video
+    source: rtsp://go2rtc:8554/backside_main?video&audio=pcma
