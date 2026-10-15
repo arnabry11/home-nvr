@@ -46,6 +46,17 @@ services:
     volumes:
       - ./watchdog/watchdog.py:/watchdog.py:ro
 
+  live:
+    build:
+      context: ./live
+    container_name: nvr-live
+    restart: always
+    depends_on:
+      - mediamtx
+    volumes:
+      # Read-only: the live view only ever reads what MediaMTX recorded.
+      - ${RECORDINGS_DIR:-./recordings}:/recordings:ro
+
   web:
     build:
       context: ./web
@@ -54,6 +65,7 @@ services:
     depends_on:
       - go2rtc
       - mediamtx
+      - live
 
 volumes:
   tailscale-state:

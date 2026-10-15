@@ -1,6 +1,6 @@
 # Local development: run the recorder stack without Tailscale and expose the
 # APIs so `npm run dev` in ./web can proxy to them.
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d go2rtc mediamtx
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d go2rtc mediamtx live
 # Add `web` to that command to try the production build at http://localhost:8081.
 services:
   web:
@@ -13,3 +13,6 @@ services:
     ports:
       - "9996:9996"
       - "9997:9997"
+  live:
+    ports:
+      - "8082:8080"
