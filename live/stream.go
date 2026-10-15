@@ -18,7 +18,14 @@ var (
 	errNoRecording   = errors.New("no recording for this camera")
 	errStalled       = errors.New("the recording stopped growing")
 	errDiscontinuity = errors.New("the recording restarted")
+	errMaxAge        = errors.New("the stream reached its maximum age")
 )
+
+// maxStreamAge bounds one response: Chrome keeps an index entry for every
+// sample of a progressive stream, so an endless one grows the tab's memory
+// for as long as it stays open. The stream ends at the first segment
+// boundary after this age and the browser reconnects.
+var maxStreamAge = time.Hour
 
 // liveStream follows a camera's newest recording and re-times its parts so
 // they form one continuous fMP4 stream that starts at zero.
@@ -29,6 +36,7 @@ type liveStream struct {
 	originNanos int64
 	sequence    uint32
 	poll, idle  time.Duration
+	opened      time.Time
 }
 
 // openLive positions a stream at the newest keyframe of the camera's newest
@@ -65,6 +73,7 @@ func openLive(ctx context.Context, dir string, poll, idle time.Duration) (*liveS
 					originNanos: segment.startNanos(first),
 					poll:        poll,
 					idle:        idle,
+					opened:      time.Now(),
 				}, nil
 			}
 			segment.Close()
@@ -125,6 +134,9 @@ func (l *liveStream) switchSegment() (bool, error) {
 	name, ok, err := segmentAfter(l.dir, l.segment.name)
 	if err != nil || !ok {
 		return false, err
+	}
+	if time.Since(l.opened) > maxStreamAge {
+		return false, errMaxAge
 	}
 	next, err := openSegment(filepath.Join(l.dir, name))
 	if errors.Is(err, errIncomplete) {

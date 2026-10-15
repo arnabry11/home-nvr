@@ -52,10 +52,11 @@ func serveLive(w http.ResponseWriter, r *http.Request, root string, poll, idle t
 	}
 	flush()
 	err = stream.copyTo(r.Context(), w, flush)
-	// A viewer leaving, a restarted recording and a stalled one all just end
-	// the response; the browser reconnects.
+	// A viewer leaving, a restarted or stalled recording and an old stream
+	// all just end the response; the browser reconnects.
 	if err != nil && r.Context().Err() == nil &&
-		!errors.Is(err, errDiscontinuity) && !errors.Is(err, errStalled) {
+		!errors.Is(err, errDiscontinuity) && !errors.Is(err, errStalled) &&
+		!errors.Is(err, errMaxAge) {
 		log.Printf("%s: %v", camera, err)
 	}
 }

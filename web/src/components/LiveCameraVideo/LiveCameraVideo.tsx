@@ -9,8 +9,13 @@ interface LiveCameraVideoProps {
   muted: boolean;
 }
 
-// The live service ends the stream when a recording restarts or stalls.
+// A failed request (for example a camera that stopped recording) retries
+// after this; a stream the live service ended reconnects at once.
 const reconnectDelayMs = 2_000;
+// A stream can stop arriving without any event (a half-open connection after
+// sleep or a network change), so a picture that stops moving retries too.
+const stalledAfterMs = 10_000;
+const progressCheckMs = 1_000;
 
 export const LiveCameraVideo = ({ camera, muted }: LiveCameraVideoProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -25,17 +30,26 @@ export const LiveCameraVideo = ({ camera, muted }: LiveCameraVideoProps) => {
     const video = videoRef.current;
     if (!video) return;
     let reconnectId: number | undefined;
-    const reconnect = () => {
-      window.clearTimeout(reconnectId);
-      reconnectId = window.setTimeout(
-        () => setSession((value) => value + 1),
-        reconnectDelayMs,
-      );
-    };
+    const reconnectNow = () => setSession((value) => value + 1);
     const onError = () => {
       setIsUnavailable(true);
-      reconnect();
+      window.clearTimeout(reconnectId);
+      reconnectId = window.setTimeout(reconnectNow, reconnectDelayMs);
     };
+    let lastTime = Number.NaN;
+    let lastProgress = Date.now();
+    const progressId = window.setInterval(() => {
+      // Hidden tabs may stop playback on purpose; they get a fresh 10 s.
+      if (document.hidden || video.currentTime !== lastTime) {
+        lastTime = video.currentTime;
+        lastProgress = Date.now();
+      } else if (Date.now() - lastProgress >= stalledAfterMs) {
+        // Once per stall, even if the new session takes a while to render.
+        lastProgress = Date.now();
+        setIsUnavailable(true);
+        reconnectNow();
+      }
+    }, progressCheckMs);
     const onPlaying = () => setIsUnavailable(false);
     const onTimeUpdate = () => {
       const { buffered } = video;
@@ -45,7 +59,7 @@ export const LiveCameraVideo = ({ camera, muted }: LiveCameraVideoProps) => {
       );
       if (target !== undefined) video.currentTime = target;
     };
-    video.addEventListener("ended", reconnect);
+    video.addEventListener("ended", reconnectNow);
     video.addEventListener("error", onError);
     video.addEventListener("playing", onPlaying);
     video.addEventListener("timeupdate", onTimeUpdate);
@@ -53,7 +67,8 @@ export const LiveCameraVideo = ({ camera, muted }: LiveCameraVideoProps) => {
     void video.play().catch(() => undefined);
     return () => {
       window.clearTimeout(reconnectId);
-      video.removeEventListener("ended", reconnect);
+      window.clearInterval(progressId);
+      video.removeEventListener("ended", reconnectNow);
       video.removeEventListener("error", onError);
       video.removeEventListener("playing", onPlaying);
       video.removeEventListener("timeupdate", onTimeUpdate);

@@ -51,6 +51,8 @@ Live view plays each camera's newest recording a few seconds behind real time
 (the Tapo app is the real-time view). The live service starts at the newest
 keyframe and keeps following the recording across segments; when the
 recording restarts or stops, it ends the stream and the browser reconnects.
+Each stream also ends at the first segment boundary after an hour, which
+keeps a dashboard that stays open from growing Chrome's memory.
 
 Only Chrome is supported: recordings carry the cameras' audio as LPCM, which
 Chrome plays in a plain video element but not through Media Source

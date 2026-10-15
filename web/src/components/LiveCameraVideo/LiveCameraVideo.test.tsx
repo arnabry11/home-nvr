@@ -41,22 +41,52 @@ describe("LiveCameraVideo", () => {
     );
   });
 
-  it("reconnects 2 s after the stream ends", () => {
+  it("reconnects as soon as the stream ends", () => {
+    // The live service ends a stream at its age limit or when the recording
+    // restarts; a camera that stopped answers 503, which retries after 2 s.
     const { container } = render(<LiveCameraVideo camera={camera} muted />);
     act(() => {
       videoIn(container).dispatchEvent(new Event("ended"));
     });
+    expect(videoIn(container).getAttribute("src")).toBe(
+      "/api/live/garage?session=1",
+    );
+  });
+
+  it("retries when the picture stops moving for 10 s", () => {
+    const { container, queryByText } = render(
+      <LiveCameraVideo camera={camera} muted />,
+    );
     act(() => {
-      vi.advanceTimersByTime(1_999);
+      vi.advanceTimersByTime(5_000);
     });
     expect(videoIn(container).getAttribute("src")).toBe(
       "/api/live/garage?session=0",
     );
     act(() => {
-      vi.advanceTimersByTime(1);
+      vi.advanceTimersByTime(7_000);
     });
     expect(videoIn(container).getAttribute("src")).toBe(
       "/api/live/garage?session=1",
+    );
+    expect(queryByText("Live view unavailable, retrying")).not.toBeNull();
+  });
+
+  it("leaves a moving picture alone", () => {
+    const { container } = render(<LiveCameraVideo camera={camera} muted />);
+    let currentTime = 0;
+    Object.defineProperty(videoIn(container), "currentTime", {
+      configurable: true,
+      get: () => currentTime,
+    });
+    for (let second = 0; second < 30; second++) {
+      currentTime = second;
+      act(() => {
+        vi.advanceTimersByTime(1_000);
+      });
+    }
+    expect(videoIn(container).getAttribute("src")).toBe(
+      "/api/live/garage?session=0",
     );
   });
 

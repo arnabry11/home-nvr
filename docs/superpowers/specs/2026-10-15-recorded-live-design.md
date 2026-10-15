@@ -64,11 +64,16 @@ real-time viewing.
    - Ends the response when the recording restarts (new stream ID, skipped
      number or different tracks) or stops growing for 15 s. The browser
      then reconnects.
+   - Ends the response at the first segment boundary after one hour, so
+     Chrome's per-sample index for a progressive stream can't grow for days
+     on a dashboard that stays open.
    - Reads the recordings directory read-only. It never talks to the
      cameras, go2rtc or MediaMTX.
-4. **Browser live tile:** `<video src="/api/live/<camera>">`, reconnects 2 s
-   after the stream ends or fails, and jumps forward when it falls more than
-   4 s behind what it has buffered. The go2rtc MSE/WebSocket live player is
+4. **Browser live tile:** `<video src="/api/live/<camera>">`. It reconnects
+   as soon as the stream ends, 2 s after a request fails, and after 10 s
+   without the picture moving while the tab is visible (a stream can stop
+   arriving without any event). It jumps forward when it falls more than 4 s
+   behind what it has buffered. The go2rtc MSE/WebSocket live player is
    removed.
 5. **No clock in live view:** while the playback page follows live, the
    tiles and the timeline heading show "Live" instead of a time. The page's

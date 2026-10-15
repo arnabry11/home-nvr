@@ -180,3 +180,19 @@ func TestOpenLiveWaitsForAKeyframe(t *testing.T) {
 		t.Errorf("video time %d, want 0", got)
 	}
 }
+
+func TestLiveEndsAtTheFirstSegmentBoundaryAfterMaxAge(t *testing.T) {
+	defer func(age time.Duration) { maxStreamAge = age }(maxStreamAge)
+	maxStreamAge = 0
+	dir := t.TempDir()
+	testSegment{stream: streamA, number: 5, start: 100 * time.Second, keyframes: []bool{true, false}, audio: true}.write(t, dir, 2)
+	out, done := runLive(t, openTestLive(t, dir, time.Second))
+	out.waitForParts(t, 2)
+	testSegment{stream: streamA, number: 6, start: 102 * time.Second, keyframes: []bool{true}, audio: true}.write(t, dir, 1)
+	if err := waitDone(t, done); !errors.Is(err, errMaxAge) {
+		t.Fatalf("err = %v, want errMaxAge", err)
+	}
+	if parts := out.waitForParts(t, 2); len(parts) != 2 {
+		t.Errorf("sent %d parts, want only the first segment's 2", len(parts))
+	}
+}
