@@ -51,6 +51,8 @@ services:
       context: ./live
     container_name: nvr-live
     restart: always
+    # The owner of RECORDINGS_DIR, which need not be readable by anyone else.
+    user: ${RECORDINGS_OWNER:-1000:1000}
     depends_on:
       - mediamtx
     volumes:
